@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String        @id @default(cuid())
+  email             String        @unique
+  fullName          String
+  passwordHash      String
+  profilePictureUrl String?       @db.Text // <-- ADD THIS LINE
+  academicYear      String?
+  major             String?
+  interests         String[]
+  skills            String[]
+  bio               String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  messagesAuthored  TeamMessage[]
+
+  // Back-relations
+  membership      TeamMember?  @relation("UserMembership") // at most one team
+  teamsLed        Team[]       @relation("TeamLeader")
+  invitesSent     TeamInvite[] @relation("InvitesSent")
+  invitesReceived TeamInvite[] @relation("InvitesReceived")
+}
+
+model Team {
+  id        String        @id @default(cuid())
+  name      String
+  leaderId  String
+  leader    User          @relation("TeamLeader", fields: [leaderId], references: [id])
+  members   TeamMember[]
+  invites   TeamInvite[]
+  messages  TeamMessage[] // <-- add this
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  teamId   String
+  userId   String   @unique // each user can be in at most one team
+  role     TeamRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation("UserMembership", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model TeamMessage {
+  id        String   @id @default(cuid())
+  teamId    String
+  authorId  String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  // (optional) @@index([authorId, createdAt])
+
+  @@index([teamId, createdAt])
+}
+
+model TeamInvite {
+  id        String       @id @default(cuid())
+  teamId    String
+  inviterId String // who initiated: leader (INVITE) or user (REQUEST)
+  inviteeId String? // INVITE: the user being invited; REQUEST: null
+  kind      InviteKind   @default(INVITE)
+  status    InviteStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+
+  team    Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  inviter User  @relation("InvitesSent", fields: [inviterId], references: [id])
+  invitee User? @relation("InvitesReceived", fields: [inviteeId], references: [id])
+
+  // Prevent dup INVITEs to the same user from the same team
+  @@unique([teamId, inviteeId, kind])
+  // Prevent dup REQUESTs from the same user to the same team
+  @@unique([teamId, inviterId, kind])
+  @@index([status])
+  @@index([teamId, kind, status])
+}
+
+enum InviteKind {
+  INVITE // team → user
+  REQUEST // user → team
+}
+
+enum TeamRole {
+  LEADER
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
