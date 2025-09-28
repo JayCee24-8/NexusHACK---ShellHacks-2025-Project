@@ -1,0 +1,5 @@
+{
+  "name": "Nexus Hack",
+  "description": "An application to help students find and form teams for the ShellHacks event at FIU. Users can create profiles, get AI-powered project ideas, and find compatible teammates based on their skills and interests.",
+  "requestFramePermissions": []
+}
